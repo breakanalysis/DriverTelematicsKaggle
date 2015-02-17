@@ -168,46 +168,23 @@ def velocity_curvature_avg(data):
     dat = np.concatenate((3.6*vel[1:]/window,3.6*curvature[1:],dir_right[1:]),axis = 1)
     return dat
 
-def curvature(data,out_times):
-    #compute curvature (1/radius). we first apply rescale_route to get rid of numerical issues
-    #arising from low velocities.
-    #curvature is computed by computing difference vector over the window and
-    #approximating the length of the osculating circular arc by the length of the straight
-    #line segment 1/window*(P_(t+window) - P_(t)). angle is computed between
-    #two such consecutive line segments. then we use s = r * angle.  
-    step_length = 10
-    #times, data = rescale_route(data,step_length)
-    times = out_times
-    n=np.size(data,0)
-    window = 1
-    #vel = np.zeros((n-window,1),dtype=float)
-    curvature = np.zeros((n-window,1),dtype=float)
-    #vel[0] = LA.norm(data[window,:] - data[0,:])
-    for i in range(1,n-window):
-        difff = data[i+window,:] - data[i,:]
-        prev_difff = data[i+window-1,:] - data[i-1,:]
-        difff_ccw90 = [-difff[1],difff[0]]
-        vel = LA.norm(difff)
-        prev_vel = LA.norm(prev_difff)
-        if (vel*prev_vel == 0):
-            curvature[i] = np.nan
-        else:
-            # have to avoid nummerical error leading to acos(x),  where x>1
-            angle = math.acos(0.99999*mydot(difff,prev_difff)/(vel*prev_vel))
-            curvature[i] = np.minimum(window*angle/vel,math.pi*window/step_length)
-            curvature[i] *= np.sign(mydot(prev_difff,difff_ccw90))
-    curv = curvature[1:]
-    print(np.amin(curv))
+def curvature(data):
+    n = np.size(data,0)
+    curv = np.zeros(n - 2)
+    diff = data[1] - data[0]
+    norm = LA.norm(diff)
+    prev_diff = None
+    prev_norm = None
     
-    times = times[1:-window]
-    last_ind = n - window -2
-    result = np.zeros_like(out_times,dtype=float)
-    i = 0
-    for j,t in enumerate(out_times):
-        while i < last_ind and t > times[i]:
-            i+=1
-        result[j] = curv[i]
-    return result
+    for i in range(1,n-1):
+        prev_diff = diff
+        prev_norm = norm
+        diff = data[i+1] - data[i]
+        norm = LA.norm(diff)
+        ddiff = diff - prev_diff
+        curv[i-1] = diff[0]*ddiff[1] - diff[1]*ddiff[0]/norm**3
+    return curv
+    
 
 def point_line_dist(p1,p2,x):
     unit_normal = p2-p1
@@ -252,23 +229,30 @@ def draw_spline_curvature(data,times):
         thick_times[10*i:10*i+10] = np.linspace(times[i],times[i+1],10)
     thick_times[-1] = times[-1]
     interpolated_data = interpolate.splev(thick_times,tck)
-    tangent = interpolate.splev(times,tck,der=1) 
+    tangent = np.array(interpolate.splev(times,tck,der=1))
+    tangent_norm = LA.norm(tangent,axis=0)
+    second_derivative = interpolate.splev(times,tck,der=2)
     
+    curvature = np.abs(tangent[0]*second_derivative[1] - tangent[1]*second_derivative[0])/tangent_norm**3
     plt.figure(1)
     plt.subplot(121)
     plt.plot(data[:,0], data[:,1], 'rx', interpolated_data[0] , interpolated_data[1] , 'k-')
     plt.subplot(122)
-    for i,d in enumerate(data):
-        
-        P.arrow( d[0], d[1], tangent[0][i], tangent[1][i], fc="k", ec="k",
-        head_width=0.05, head_length=0.1 )
+    plt.plot(times, curvature, 'rx')
+    plt.axis([times[0],times[-1],np.amin(curvature),np.amax(curvature)])
+    
 
+#code for drawing tangent arrows    
+'''    
+for i,d in enumerate(data):
+    P.arrow( d[0], d[1], second_derivative[0,i], second_derivative[1,i], fc="k", ec="k",
+    head_width=0.05, head_length=0.1 )'''
+    
     
 def draw_curvature(i,j):
     data = get_data(i,j)
-    out_times = range(np.size(data,0)+1)
-    curv = pds.rolling_mean(curvature(data,out_times),120)
-    print("length" + str(np.size(curv)))
+    data = douglas_pecker(data,1)
+    curv = pds.rolling_mean(curvature(data),10)
     fig, ax = plt.subplots()
     ax.plot(range(1,1+len(curv)),curv)
     sorted_curv = sorted(curv)
@@ -279,7 +263,7 @@ def draw_curvature(i,j):
     #high = sorted_curv[int(0.97*n)]
     low = -0.0007
     high = 0.0007
-    ax.axis([1,np.size(data,0),low,high])
+    #ax.axis([1,np.size(data,0),low,high])
 
 
 def velocity(data):
@@ -307,13 +291,27 @@ data = douglas_pecker(data,80)
 
 times = list(range(np.size(data,0)))
 
-data = np.array([[np.cos(t),np.sin(t)] for t in np.linspace(0,math.pi,20)])
-times = list(range(np.size(data,0)))
+#data = np.array([[np.cos(t),np.sin(t)] for t in np.linspace(0,math.pi,20)])
+#times = list(range(20))
 
 #data.shape
 #np.size(times)
 
 draw_spline_curvature(data,times)
+
+# <codecell>
+
+draw_trip(52,13)
+draw_curvature(52,13)
+
+# <codecell>
+
+import pandas as pds
+import numpy as np
+#pds.rolling_mean(0.000000001 * np.ones((100000000,1),dtype=float),100000000-10)
+
+x=0.0001*np.ones(10000,dtype=float)
+print(x)
 
 # <codecell>
 
