@@ -12,6 +12,8 @@ from numpy import genfromtxt
 from IPython.display import display
 import pandas as pds
 import os
+from scipy import interpolate
+import pylab as P
 
 
 
@@ -40,7 +42,7 @@ def display_animation(anim):
     return(HTML(anim_to_html(anim)))
 
 def get_driver_ids():
-    dirs = os.environ['TELEMATICS']
+    dirs = os.listdir(os.environ['TELEMATICS'])
     return list(map(int,sorted(dirs[1:])))
 
 
@@ -243,10 +245,25 @@ def test_pecker(i,j,epsilon):
     data = douglas_pecker(data,epsilon)
     plt.scatter(*data.T)
 
-def fit_spline(data):
-    #TODO
-    return None
+def draw_spline_curvature(data,times):
+    tck,_ = interpolate.splprep(data.T,u=times)
+    thick_times = np.zeros(10*len(times) - 9)
+    for i in range(len(times)-1):
+        thick_times[10*i:10*i+10] = np.linspace(times[i],times[i+1],10)
+    thick_times[-1] = times[-1]
+    interpolated_data = interpolate.splev(thick_times,tck)
+    tangent = interpolate.splev(times,tck,der=1) 
+    
+    plt.figure(1)
+    plt.subplot(121)
+    plt.plot(data[:,0], data[:,1], 'rx', interpolated_data[0] , interpolated_data[1] , 'k-')
+    plt.subplot(122)
+    for i,d in enumerate(data):
+        
+        P.arrow( d[0], d[1], tangent[0][i], tangent[1][i], fc="k", ec="k",
+        head_width=0.05, head_length=0.1 )
 
+    
 def draw_curvature(i,j):
     data = get_data(i,j)
     out_times = range(np.size(data,0)+1)
@@ -280,14 +297,23 @@ import numpy.linalg as LA
 import math
 import matplotlib.pyplot as plt
 
-i,j = (53,12)
+i,j = (1,1)
 epsilon = 2
-test_pecker(i,j,epsilon)
+#test_pecker(i,j,epsilon)
 data = get_data(i,j)
-print(len(data))
-print(len(douglas_pecker(data,epsilon)))
+data = douglas_pecker(data,80)
+#print(len(data))
+#print(len(douglas_pecker(data,epsilon)))
 
+times = list(range(np.size(data,0)))
 
+data = np.array([[np.cos(t),np.sin(t)] for t in np.linspace(0,math.pi,20)])
+times = list(range(np.size(data,0)))
+
+#data.shape
+#np.size(times)
+
+draw_spline_curvature(data,times)
 
 # <codecell>
 
