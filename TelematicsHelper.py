@@ -168,20 +168,23 @@ def velocity_curvature_avg(data):
     dat = np.concatenate((3.6*vel[1:]/window,3.6*curvature[1:],dir_right[1:]),axis = 1)
     return dat
 
-def curvature(data):
+def curvature(data,times=None):
     n = np.size(data,0)
+    if times= None:
+        times = np.arange(n)
     curv = np.zeros(n - 2)
     diff = data[1] - data[0]
     norm = LA.norm(diff)
+    
     prev_diff = None
     prev_norm = None
     
     for i in range(1,n-1):
         prev_diff = diff
         prev_norm = norm
-        diff = data[i+1] - data[i]
+        diff = (data[i+1] - data[i])/(times[i+1] - times[i])
         norm = LA.norm(diff)
-        ddiff = diff - prev_diff
+        ddiff = 2*(diff - prev_diff)/(times[i+1] - times[i-1])
         curv[i-1] = diff[0]*ddiff[1] - diff[1]*ddiff[0]/norm**3
     return curv
     
@@ -193,6 +196,7 @@ def point_line_dist(p1,p2,x):
     return abs(np.dot(x-p1, unit_normal))
 
 def douglas_pecker(data, epsilon):
+    # times returned are the indices chosen for the reduced trajectory
     #// Find the point with the maximum distance
     dmax = 0
     index = 1
@@ -205,21 +209,22 @@ def douglas_pecker(data, epsilon):
     #// If max distance is greater than epsilon, recursively simplify
     if dmax > epsilon:
         #// Recursive call
-        recResults1 = douglas_pecker(data[:index+1], epsilon)
-        recResults2 = douglas_pecker(data[index:], epsilon)
-
+        recResults1,times1 = douglas_pecker(data[:index+1], epsilon)
+        recResults2,times2 = douglas_pecker(data[index:], epsilon)
+        times = np.concatenate((times1[:-1],times2+index))
  
         #// Build the result list
         result = np.concatenate((recResults1[:-1],recResults2), axis = 0)
     else:
         result = data[[0,-1]]
+        times = np.array([0,len(data)-1])
     #// Return the result
-    return result
+    return result, times
 
 def test_pecker(i,j,epsilon):
     i = get_driver_ids()[i]
     data = get_data(i,j)
-    data = douglas_pecker(data,epsilon)
+    data, _ = douglas_pecker(data,epsilon)
     plt.scatter(*data.T)
 
 def draw_spline_curvature(data,times):
@@ -251,7 +256,7 @@ for i,d in enumerate(data):
     
 def draw_curvature(i,j):
     data = get_data(i,j)
-    data = douglas_pecker(data,1)
+    data, _ = douglas_pecker(data,1)
     curv = pds.rolling_mean(curvature(data),10)
     fig, ax = plt.subplots()
     ax.plot(range(1,1+len(curv)),curv)
@@ -285,9 +290,7 @@ i,j = (1,1)
 epsilon = 2
 #test_pecker(i,j,epsilon)
 data = get_data(i,j)
-data = douglas_pecker(data,80)
-#print(len(data))
-#print(len(douglas_pecker(data,epsilon)))
+data, times = douglas_pecker(data,80)
 
 times = list(range(np.size(data,0)))
 
@@ -312,6 +315,12 @@ import numpy as np
 
 x=0.0001*np.ones(10000,dtype=float)
 print(x)
+
+# <codecell>
+
+import numpy as np
+x = np.zeros((5,2))
+len(x)
 
 # <codecell>
 
