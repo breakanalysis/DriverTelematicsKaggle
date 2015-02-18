@@ -54,30 +54,45 @@ def get_data(i,j):
     path = "{0}{1}/{2}.csv".format(pre_path,i,j)
     return genfromtxt(path, delimiter=',', skip_header = 1)
 
-def draw_trip(i,j):
-    i = get_driver_ids()[i-1]
+def draw_trip(i,j,epsilon=0):
     draw_every = 10
     speed_up_factor = 10
     X = get_data(i,j)
     m,_ = X.shape
     X_sparsed = X[range(0,m,draw_every),:]
+    
+    X_doug, times = douglas_pecker(X,epsilon)
+    curv = curvature(X_doug,times)
+    
     fig, ax = plt.subplots()
+    plt.subplot(121)
     tracker, = ax.plot([], [], 'ro')
     minx,maxx,miny,maxy = (np.min(X[:,0]) , np.max(X[:,0]) , np.min(X[:,1]), np.max(X[:,1]))
     ax.set_ylim(miny, maxy)
     ax.set_xlim(minx, maxx)
     
+    plt.subplot(122)
+    tracker2, = ax.plot([],[],'ro')
+    
+    
     def init_func():
+        plt.subplot(121)
         line, = ax.plot(X[:,0],X[:,1], lw=2)
-        return line,
+        plt.subplot(122)
+        line2, = ax.plot(times,curv, lw=2)
+        
+        return line, line2
+        
         
     def run(data):
         # update the data
-
+        i = run.i
         tracker.set_data(data[0], data[1])
-
-        return tracker,
-
+        tracker2.set_data(times[i],curv[i])
+        i+=1
+        return tracker, tracker2
+    run.i = 0
+    
     interval = 1000*draw_every/speed_up_factor
     
     ani = animation.FuncAnimation(fig, run, X_sparsed, blit=True, interval=interval,
@@ -170,7 +185,7 @@ def velocity_curvature_avg(data):
 
 def curvature(data,times=None):
     n = np.size(data,0)
-    if times= None:
+    if times is None:
         times = np.arange(n)
     curv = np.zeros(n - 2)
     diff = data[1] - data[0]
@@ -256,20 +271,12 @@ for i,d in enumerate(data):
     
 def draw_curvature(i,j):
     data = get_data(i,j)
-    data, _ = douglas_pecker(data,1)
-    curv = pds.rolling_mean(curvature(data),10)
+    data, times = douglas_pecker(data,5)
+    #curv = pds.rolling_mean(curvature(data,times),10)
+    curv = curvature(data,times)
     fig, ax = plt.subplots()
-    ax.plot(range(1,1+len(curv)),curv)
-    sorted_curv = sorted(curv)
-    for i in curv:
-        None#print(i)
-    n = len(sorted_curv)
-    #low = sorted_curv[int(0.03*n)]
-    #high = sorted_curv[int(0.97*n)]
-    low = -0.0007
-    high = 0.0007
-    #ax.axis([1,np.size(data,0),low,high])
-
+    ax.plot(times[1:-1],curv)
+    
 
 def velocity(data):
     #compute velocity as norm of difference of consecutive coordinates.
@@ -304,23 +311,121 @@ draw_spline_curvature(data,times)
 
 # <codecell>
 
-draw_trip(52,13)
-draw_curvature(52,13)
+#draw_trip(52,13)
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+import matplotlib.animation as animation
+
+# This example uses subclassing, but there is no reason that the proper function
+# couldn't be set up and then use FuncAnimation. The code is long, but not
+# really complex. The length is due solely to the fact that there are a total
+# of 9 lines that need to be changed for the animation as well as 3 subplots
+# that need initial set up.
+class SubplotAnimation(animation.TimedAnimation):
+    def __init__(self):
+        fig = plt.figure()
+        ax1 = fig.add_subplot(1, 2, 1)
+        ax2 = fig.add_subplot(2, 2, 2)
+        ax3 = fig.add_subplot(2, 2, 4)
+
+        self.t = np.linspace(0, 80, 400)
+        self.x = np.cos(2 * np.pi * self.t / 10.)
+        self.y = np.sin(2 * np.pi * self.t / 10.)
+        self.z = 10 * self.t
+
+        ax1.set_xlabel('x')
+        ax1.set_ylabel('y')
+        self.line1 = Line2D([], [], color='black')
+        self.line1a = Line2D([], [], color='red', linewidth=2)
+        self.line1e = Line2D([], [], color='red', marker='o', markeredgecolor='r')
+        ax1.add_line(self.line1)
+        ax1.add_line(self.line1a)
+        ax1.add_line(self.line1e)
+        ax1.set_xlim(-1, 1)
+        ax1.set_ylim(-2, 2)
+        ax1.set_aspect('equal', 'datalim')
+
+        ax2.set_xlabel('y')
+        ax2.set_ylabel('z')
+        self.line2 = Line2D([], [], color='black')
+        self.line2a = Line2D([], [], color='red', linewidth=2)
+        self.line2e = Line2D([], [], color='red', marker='o', markeredgecolor='r')
+        ax2.add_line(self.line2)
+        ax2.add_line(self.line2a)
+        ax2.add_line(self.line2e)
+        ax2.set_xlim(-1, 1)
+        ax2.set_ylim(0, 800)
+
+        ax3.set_xlabel('x')
+        ax3.set_ylabel('z')
+        self.line3 = Line2D([], [], color='black')
+        self.line3a = Line2D([], [], color='red', linewidth=2)
+        self.line3e = Line2D([], [], color='red', marker='o', markeredgecolor='r')
+        ax3.add_line(self.line3)
+        ax3.add_line(self.line3a)
+        ax3.add_line(self.line3e)
+        ax3.set_xlim(-1, 1)
+        ax3.set_ylim(0, 800)
+
+        animation.TimedAnimation.__init__(self, fig, interval=50, blit=True)
+
+    def _draw_frame(self, framedata):
+        i = framedata
+        head = i - 1
+        head_len = 10
+        head_slice = (self.t > self.t[i] - 1.0) & (self.t < self.t[i])
+
+        self.line1.set_data(self.x[:i], self.y[:i])
+        self.line1a.set_data(self.x[head_slice], self.y[head_slice])
+        self.line1e.set_data(self.x[head], self.y[head])
+
+        self.line2.set_data(self.y[:i], self.z[:i])
+        self.line2a.set_data(self.y[head_slice], self.z[head_slice])
+        self.line2e.set_data(self.y[head], self.z[head])
+
+        self.line3.set_data(self.x[:i], self.z[:i])
+        self.line3a.set_data(self.x[head_slice], self.z[head_slice])
+        self.line3e.set_data(self.x[head], self.z[head])
+
+        self._drawn_artists = [self.line1, self.line1a, self.line1e,
+            self.line2, self.line2a, self.line2e,
+            self.line3, self.line3a, self.line3e]
+
+    def new_frame_seq(self):
+        return iter(range(self.t.size))
+
+    def _init_draw(self):
+        lines =  [self.line1, self.line1a, self.line1e,
+            self.line2, self.line2a, self.line2e,
+            self.line3, self.line3a, self.line3e]
+        for l in lines:
+            l.set_data([], [])
+
+ani = SubplotAnimation()
+#ani.save('test_sub.mp4')
+display(display_animation(ani))
 
 # <codecell>
 
-import pandas as pds
-import numpy as np
-#pds.rolling_mean(0.000000001 * np.ones((100000000,1),dtype=float),100000000-10)
-
-x=0.0001*np.ones(10000,dtype=float)
-print(x)
+draw_curvature(52,13)
 
 # <codecell>
 
 import numpy as np
 x = np.zeros((5,2))
 len(x)
+
+# <codecell>
+
+import numpy as np
+
+np.amin([1,2])
+
+# <codecell>
+
+isNone(None)
 
 # <codecell>
 
