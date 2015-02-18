@@ -41,7 +41,7 @@ def display_animation(anim):
 
 def get_driver_ids():
     dirs = os.environ['TELEMATICS']
-    return list(map(int,sorted(dirs[1:])))
+    return list(map(int,sorted(os.listdir(dirs))))
 
 
 
