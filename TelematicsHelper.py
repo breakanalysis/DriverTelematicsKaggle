@@ -54,52 +54,58 @@ def get_data(i,j):
     path = "{0}{1}/{2}.csv".format(pre_path,i,j)
     return genfromtxt(path, delimiter=',', skip_header = 1)
 
-def draw_trip(i,j,epsilon=0):
+
+def draw_trip(i,j,epsilon=0,X = None):
+    #Use X for overriding trip data and provide your own data.
     draw_every = 10
     speed_up_factor = 10
-    X = get_data(i,j)
+    if X is None:
+        X = get_data(i,j)
     m,_ = X.shape
-    X_sparsed = X[range(0,m,draw_every),:]
-    
-    X_doug, times = douglas_pecker(X,epsilon)
-    curv = curvature(X_doug,times)
-    
-    fig, ax = plt.subplots()
-    plt.subplot(121)
-    tracker, = ax.plot([], [], 'ro')
+    grid = list(range(0,m,draw_every))
     minx,maxx,miny,maxy = (np.min(X[:,0]) , np.max(X[:,0]) , np.min(X[:,1]), np.max(X[:,1]))
-    ax.set_ylim(miny, maxy)
-    ax.set_xlim(minx, maxx)
     
-    plt.subplot(122)
-    tracker2, = ax.plot([],[],'ro')
+    X_doug, times = douglas_pecker(X,epsilon)  # testing how much smoothing we can use and still have sufficient info on curv
+    curv = curvature(X_doug,times)
+        
+
+    curv_t = (times[1],times[-2])
+    curv_interp = interpolate.interp1d(times[1:-1],curv,kind='linear')
+    
+    
+    cmax = np.amax(np.abs(curv))    
+    
+    fig = plt.figure()
+    sub = fig.add_subplot(121,xlim=(minx, maxx), ylim=(miny, maxy))
+    sub2 = fig.add_subplot(122,xlim=curv_t, ylim=(-2*cmax, 2*cmax))
+    
+    tracker, = sub.plot([], [], 'ro')
+    
+    tracker2, = sub2.plot([],[],'ro')
     
     
     def init_func():
-        plt.subplot(121)
-        line, = ax.plot(X[:,0],X[:,1], lw=2)
-        plt.subplot(122)
-        line2, = ax.plot(times,curv, lw=2)
+        line, = sub.plot(X[:,0],X[:,1], lw=2)
+        line2, = sub2.plot(times[1:-1],curv, lw=2)
         
         return line, line2
-        
-        
-    def run(data):
+    
+    
+    def run(t_from_grid):
         # update the data
-        i = run.i
-        tracker.set_data(data[0], data[1])
-        tracker2.set_data(times[i],curv[i])
-        i+=1
+        path = X[t_from_grid,:]
+        t = float(np.clip(t_from_grid,*curv_t))
+        tracker.set_data(path[0], path[1])
+        tracker2.set_data(t,curv_interp(t))
         return tracker, tracker2
-    run.i = 0
     
     interval = 1000*draw_every/speed_up_factor
     
-    ani = animation.FuncAnimation(fig, run, X_sparsed, blit=True, interval=interval,
+    ani = animation.FuncAnimation(fig, run, grid, blit=True, interval=interval,
         repeat=False, init_func = init_func)
     #return ani
     display(display_animation(ani))
-
+    
 
 def draw_vt(i,j):
     data = get_data(i,j)
@@ -109,12 +115,44 @@ def draw_vt(i,j):
 
 
 def rescale_route(data,step_length=10):
-    #gives a new set of coordinates with the same number of measurements,
-    #but each step has now the same length. to obtain the coordinates, we
-    #let a particle traverse the route (linearly interpolated) with the velocity  step_length m/s,
-    #and we record its position every second.
+    #rescale_route(data,step_length=10):
+    #we sample points from the route given by data linearly interpolated so that each
+    #sampling point is at distance step_length from the previous, except for the last point.
 
-
+    index = 1
+    prev = data[0]
+    result = [prev]
+    inside = prev
+    times = [0]
+    T = 0
+    remaining_of_sec = 1.0
+    
+    while index < len(data):
+        while index < len(data) and LA.norm(data[index]-prev)<=step_length:
+            inside = data[index]
+            T = index
+            remaining_of_sec = 1.0
+            index += 1
+        if index == len(data):
+            new_point = inside
+            times.append(index-1)
+        else:
+            diff1 = inside - prev
+            diff2 = data[index] - inside
+            diff2sq = np.dot(diff2,diff2)
+            c_proj = np.dot( diff1, diff2 ) / diff2sq
+            t = -c_proj + math.sqrt(c_proj**2 + (step_length**2 - np.dot(diff1,diff1))/diff2sq)
+            T += t*remaining_of_sec
+            remaining_of_sec *= (1-t)
+            times.append(T)
+            new_point = inside + t*diff2
+            prev = new_point
+            inside = new_point
+            
+        result.append(new_point)
+    return times, np.array(result)
+    ####
+    '''
     total_length = 0
     n,_ = data.shape
     for i in range(n-1):
@@ -149,59 +187,9 @@ def rescale_route(data,step_length=10):
         times[points_added] = time
         points_added+=1
         length_to_go_total -= step_length
-    return times, dat
-
-def mydot(v1,v2):
-    return sum((x*y for x,y in zip(v1,v2)))
+    return times, dat'''
 
 
-def velocity_curvature_avg(data):
-    #compute velocity and curvature (1/radius). velocity is computed looking ahead by window.
-    #curvature is also computed by computing difference vector over the window and
-    #approximating the length of the osculating circular arc by the length of the straight
-    #line segment 1/window*(P_(t+window) - P_(t)). angle is computed between
-    #two such consecutive line segments. then we use s = r * angle.  
-
-    n=np.size(data,0)
-    window = 1
-    vel = np.zeros((n-window,1),dtype=float)
-    curvature = np.zeros((n-window,1),dtype=float)
-    dir_right = np.zeros((n-window,1),dtype=int)
-    vel[0] = LA.norm(data[window,:] - data[0,:])
-    for i in range(1,n-window):
-        difff = data[i+window,:] - data[i,:]
-        prev_difff = data[i+window-1,:] - data[i-1,:]
-        difff_ccw90 = [-difff[1],difff[0]]
-        vel[i] = LA.norm(difff)
-        if (vel[i]*vel[i-1] == 0):
-            curvature[i] = np.nan
-        else:
-            # have to avoid nummerical error leading to acos(x),  where x>1
-            angle = math.acos(0.99999*mydot(difff,prev_difff)/(vel[i-1]*vel[i]))
-            curvature[i] = window*angle/vel[i]
-            dir_right[i] = np.sign(mydot(prev_difff,difff_ccw90))
-    dat = np.concatenate((3.6*vel[1:]/window,3.6*curvature[1:],dir_right[1:]),axis = 1)
-    return dat
-
-def curvature(data,times=None):
-    n = np.size(data,0)
-    if times is None:
-        times = np.arange(n)
-    curv = np.zeros(n - 2)
-    diff = data[1] - data[0]
-    norm = LA.norm(diff)
-    
-    prev_diff = None
-    prev_norm = None
-    
-    for i in range(1,n-1):
-        prev_diff = diff
-        prev_norm = norm
-        diff = (data[i+1] - data[i])/(times[i+1] - times[i])
-        norm = LA.norm(diff)
-        ddiff = 2*(diff - prev_diff)/(times[i+1] - times[i-1])
-        curv[i-1] = diff[0]*ddiff[1] - diff[1]*ddiff[0]/norm**3
-    return curv
     
 
 def point_line_dist(p1,p2,x):
@@ -236,11 +224,12 @@ def douglas_pecker(data, epsilon):
     #// Return the result
     return result, times
 
-def test_pecker(i,j,epsilon):
-    i = get_driver_ids()[i]
-    data = get_data(i,j)
+def test_pecker(i,j,epsilon,data=None):
+    if data is None:
+        data = get_data(i,j)
     data, _ = douglas_pecker(data,epsilon)
     plt.scatter(*data.T)
+    
 
 def draw_spline_curvature(data,times):
     tck,_ = interpolate.splprep(data.T,u=times)
@@ -269,13 +258,38 @@ for i,d in enumerate(data):
     head_width=0.05, head_length=0.1 )'''
     
     
-def draw_curvature(i,j):
-    data = get_data(i,j)
-    data, times = douglas_pecker(data,5)
+def draw_curvature(i,j,epsilon=5,data=None):
+    if data is None:
+        data = get_data(i,j)
+    data, times = douglas_pecker(data,epsilon)
     #curv = pds.rolling_mean(curvature(data,times),10)
     curv = curvature(data,times)
-    fig, ax = plt.subplots()
-    ax.plot(times[1:-1],curv)
+    fig = plt.figure()
+    cmax = np.amax(np.abs(curv))
+    sub=fig.add_subplot(111,xlim=(times[1],times[-2]) , ylim=(-2*cmax,2*cmax))
+    sub.plot(times[1:-1],curv)
+    
+
+    
+def curvature(data,times=None):
+    n = np.size(data,0)
+    if times is None:
+        times = np.arange(n)
+    curv = np.zeros(n - 2)
+    diff = data[1] - data[0]
+    norm = LA.norm(diff)
+    
+    prev_diff = None
+    prev_norm = None
+    
+    for i in range(1,n-1):
+        prev_diff = diff
+        prev_norm = norm
+        diff = (data[i+1] - data[i])/(times[i+1] - times[i])
+        norm = LA.norm(diff)
+        ddiff = 2*(diff - prev_diff)/(times[i+1] - times[i-1])
+        curv[i-1] = (diff[0]*ddiff[1] - diff[1]*ddiff[0])/norm**3
+    return curv
     
 
 def velocity(data):
@@ -284,6 +298,7 @@ def velocity(data):
     window = 1
     n=np.size(data,0)
     return 3.6*LA.norm(data[window:,:] - data[:n-window,:],axis = 1)
+
 
 
 # <codecell>
@@ -311,121 +326,28 @@ draw_spline_curvature(data,times)
 
 # <codecell>
 
-#draw_trip(52,13)
+#draw_curvature(52,13,0,np.array([[np.cos(t),np.sin(t)] for t in np.linspace(0,2*math.pi,150)]))
+#test_pecker(-1,1,0.001,np.array([[np.cos(t),np.sin(t)] for t in np.linspace(0,2*math.pi,150)]))
 
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-import matplotlib.animation as animation
+data = np.array([[np.cos(t),np.sin(t)] for t in np.linspace(0,2*math.pi,150)])
+datap,times = douglas_pecker(data,0)
 
-# This example uses subclassing, but there is no reason that the proper function
-# couldn't be set up and then use FuncAnimation. The code is long, but not
-# really complex. The length is due solely to the fact that there are a total
-# of 9 lines that need to be changed for the animation as well as 3 subplots
-# that need initial set up.
-class SubplotAnimation(animation.TimedAnimation):
-    def __init__(self):
-        fig = plt.figure()
-        ax1 = fig.add_subplot(1, 2, 1)
-        ax2 = fig.add_subplot(2, 2, 2)
-        ax3 = fig.add_subplot(2, 2, 4)
-
-        self.t = np.linspace(0, 80, 400)
-        self.x = np.cos(2 * np.pi * self.t / 10.)
-        self.y = np.sin(2 * np.pi * self.t / 10.)
-        self.z = 10 * self.t
-
-        ax1.set_xlabel('x')
-        ax1.set_ylabel('y')
-        self.line1 = Line2D([], [], color='black')
-        self.line1a = Line2D([], [], color='red', linewidth=2)
-        self.line1e = Line2D([], [], color='red', marker='o', markeredgecolor='r')
-        ax1.add_line(self.line1)
-        ax1.add_line(self.line1a)
-        ax1.add_line(self.line1e)
-        ax1.set_xlim(-1, 1)
-        ax1.set_ylim(-2, 2)
-        ax1.set_aspect('equal', 'datalim')
-
-        ax2.set_xlabel('y')
-        ax2.set_ylabel('z')
-        self.line2 = Line2D([], [], color='black')
-        self.line2a = Line2D([], [], color='red', linewidth=2)
-        self.line2e = Line2D([], [], color='red', marker='o', markeredgecolor='r')
-        ax2.add_line(self.line2)
-        ax2.add_line(self.line2a)
-        ax2.add_line(self.line2e)
-        ax2.set_xlim(-1, 1)
-        ax2.set_ylim(0, 800)
-
-        ax3.set_xlabel('x')
-        ax3.set_ylabel('z')
-        self.line3 = Line2D([], [], color='black')
-        self.line3a = Line2D([], [], color='red', linewidth=2)
-        self.line3e = Line2D([], [], color='red', marker='o', markeredgecolor='r')
-        ax3.add_line(self.line3)
-        ax3.add_line(self.line3a)
-        ax3.add_line(self.line3e)
-        ax3.set_xlim(-1, 1)
-        ax3.set_ylim(0, 800)
-
-        animation.TimedAnimation.__init__(self, fig, interval=50, blit=True)
-
-    def _draw_frame(self, framedata):
-        i = framedata
-        head = i - 1
-        head_len = 10
-        head_slice = (self.t > self.t[i] - 1.0) & (self.t < self.t[i])
-
-        self.line1.set_data(self.x[:i], self.y[:i])
-        self.line1a.set_data(self.x[head_slice], self.y[head_slice])
-        self.line1e.set_data(self.x[head], self.y[head])
-
-        self.line2.set_data(self.y[:i], self.z[:i])
-        self.line2a.set_data(self.y[head_slice], self.z[head_slice])
-        self.line2e.set_data(self.y[head], self.z[head])
-
-        self.line3.set_data(self.x[:i], self.z[:i])
-        self.line3a.set_data(self.x[head_slice], self.z[head_slice])
-        self.line3e.set_data(self.x[head], self.z[head])
-
-        self._drawn_artists = [self.line1, self.line1a, self.line1e,
-            self.line2, self.line2a, self.line2e,
-            self.line3, self.line3a, self.line3e]
-
-    def new_frame_seq(self):
-        return iter(range(self.t.size))
-
-    def _init_draw(self):
-        lines =  [self.line1, self.line1a, self.line1e,
-            self.line2, self.line2a, self.line2e,
-            self.line3, self.line3a, self.line3e]
-        for l in lines:
-            l.set_data([], [])
-
-ani = SubplotAnimation()
-#ani.save('test_sub.mp4')
-display(display_animation(ani))
+draw_curvature(1,1,0)
 
 # <codecell>
 
-draw_curvature(52,13)
+X = get_data(34,46)
+X.shape
 
-# <codecell>
+times,X = rescale_route(X)
 
-import numpy as np
-x = np.zeros((5,2))
-len(x)
+fig,ax = plt.subplots()
+ax.plot(*X.T)
 
-# <codecell>
-
-import numpy as np
-
-np.amin([1,2])
-
-# <codecell>
-
-isNone(None)
+#real speeds
+#draw_trip(44,46,0)
+#constant speed
+draw_trip(0,0,1,X)
 
 # <codecell>
 
