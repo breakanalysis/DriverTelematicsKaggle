@@ -45,11 +45,11 @@ def get_driver_ids():
     dirs = os.listdir(os.environ['TELEMATICS'])
     return list(map(int,sorted(dirs[1:])))
 
-
-
+#make it global to save time
+driver_ids = get_driver_ids()
 
 def get_data(i,j):
-    i = get_driver_ids()[i-1]
+    i = driver_ids[i-1]
     pre_path = os.environ['TELEMATICS']
     path = "{0}{1}/{2}.csv".format(pre_path,i,j)
     return genfromtxt(path, delimiter=',', skip_header = 1)
@@ -300,6 +300,22 @@ def velocity(data):
     return 3.6*LA.norm(data[window:,:] - data[:n-window,:],axis = 1)
 
 
+def accel(data, vel=None):
+    #compute tangential accelearation
+    if (vel is None):
+        vel = velocity(data)
+    return np.diff(vel)
+
+def py_ang(v1, v2):
+    """ Returns the angle in radians between vectors 'v1' and 'v2'    """
+    cosang = np.dot(v1, v2)
+    sinang = np.cross(v1, v2)
+    return np.arctan2(sinang, cosang)
+
+def angles(data):
+    diff = np.diff(data, axis=0)
+    return np.array([py_ang(diff[i,:], diff[i+1,:]) for i in xrange(diff.shape[0]-1)])
+    
 
 # <codecell>
 
@@ -323,6 +339,7 @@ times = list(range(np.size(data,0)))
 #np.size(times)
 
 draw_spline_curvature(data,times)
+print accel(data)
 
 # <codecell>
 
@@ -342,12 +359,28 @@ X.shape
 times,X = rescale_route(X)
 
 fig,ax = plt.subplots()
-ax.plot(*X.T)
+acc =accel(X)
+plt.plot(list(range(1,np.size(acc)+1)), acc)
 
 #real speeds
 #draw_trip(44,46,0)
 #constant speed
 draw_trip(0,0,1,X)
+
+# <codecell>
+
+data=np.array([[1.1,2.2],[3.5, 4.56], [6.456,3.45],[4.45,5.45], [1.45, 12.5]])
+print np.diff(data, axis=0)
+print angles(data)
+
+# <codecell>
+
+1+1
+
+# <codecell>
+
+X = get_data(1,1)
+print np.shape(X)
 
 # <codecell>
 

@@ -12,49 +12,20 @@ def get_features(data, concat=False, plot=False):
     len_t = np.shape(data)[0]
 
     times,X = th.rescale_route(data)
-    curv = th.curvature(data)
+    curv = [] #th.curvature(data)
     vel = th.velocity(data)
     acc = th.accel(data, vel)
     angles = th.angles(data)*180.0/np.pi
 
-    curv = curv[np.isfinite(curv)]
-
-    #acc_bins = np.concatenate([np.linspace(-20, -1, 20, endpoint=False), 
-    #                           np.linspace(-1,1,20, endpoint=False), np.linspace(1,20,20)])
-
-    #curv_bins = np.concatenate([np.linspace(0,3,40)])
-
-    #v_bins = np.concatenate([np.linspace(0,5,20, endpoint=False), np.linspace(20,90,30, endpoint=False),
-    #                         np.linspace(90,150,5)])
-
     
-    curv_bins = np.exp(np.linspace(-3, 1, 40))
-    v_bins = np.exp(np.linspace(-1, 5, 30))
-    acc_bins = np.concatenate([-np.exp(np.linspace(3,-8, 20)),np.exp(np.linspace(-8,3, 20))]) 
-    ang_bins = np.concatenate([np.linspace(-25,-5,5, endpoint=False), np.linspace(-5,5,20, endpoint=False),
-                             np.linspace(5,25,5)])
-
     
-    if (plot):
-        plt.figure(1)
-        plt.subplot(141)
-        plt.hist(vel, bins=v_bins, normed=True)
-        plt.subplot(142)
-        plt.hist(acc, bins=acc_bins, normed=True)
-        plt.subplot(143)
-        plt.hist(curv, bins=curv_bins, normed=True)
-        plt.subplot(144)
-        plt.hist(angles, bins=ang_bins, normed=True)
-
-    curv_h, curv_e = np.histogram(curv, bins=curv_bins, density=True)
-    angles_h, angles_e = np.histogram(angles, bins=ang_bins, density=True)
-    vel_h, vell_e = np.histogram(vel, bins=v_bins, density=True)
-    acc_h, acc_e = np.histogram(acc, bins=acc_bins, density=True)
+    #just put everything in a huge multidimensional histogram
+    v_acc_ang_h, edges = np.histogramdd([vel[:-1], acc, angles], range=([0, 160], [-20, 20], [-180, 180]), bins=20)
     
     if (concat):
-        return np.concatenate([vel_h, acc_h, curv_h, angles_h])
+        return np.ravel(v_acc_ang_h)
     
-    return vel_h, acc_h, curv_h, angles_h
+    return v_acc_ang_h, edges#vel_h, acc_h, curv_h, angles_h
 
 
 def get_training_data(driver_1_id, drivers_0_ids, r_ids=np.arange(1,201)):
@@ -86,11 +57,11 @@ def get_training_data(driver_1_id, drivers_0_ids, r_ids=np.arange(1,201)):
 
 # <codecell>
 
-d_0 = np.random.choice(np.arange(2, 2735), 20, replace=False)
-r_indx = np.random.choice(np.arange(1, 201), 20, replace=False)
-X, labels = get_training_data(1, d_0, r_indx)
+data = th.get_data(1,2)
+hh = get_features(data, True, False)
 
-print np.shape(X), np.shape(labels)
+print np.size(hh)
+print np.size(data)
 
 # <codecell>
 
