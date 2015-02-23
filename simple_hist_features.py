@@ -7,6 +7,9 @@ import TelematicsHelper as th
 import matplotlib.pyplot as plt
 import numpy as np
 
+BINS=20
+FEATURES_NUM = BINS**3
+
 def get_features(data, concat=False, plot=False):
     #.shape
     len_t = np.shape(data)[0]
@@ -20,14 +23,47 @@ def get_features(data, concat=False, plot=False):
     
     
     #just put everything in a huge multidimensional histogram
-    v_acc_ang_h, edges = np.histogramdd([vel[:-1], acc, angles], range=([0, 160], [-20, 20], [-180, 180]), bins=20)
+    v_acc_ang_h, edges = np.histogramdd([vel[:-1], acc, angles], range=([0, 160], [-20, 20], [-180, 180]), bins=BINS, normed=True)
     
     if (concat):
         return np.ravel(v_acc_ang_h)
     
     return v_acc_ang_h, edges#vel_h, acc_h, curv_h, angles_h
 
+def get_all_driver_features(driver_id):
+    X = np.zeros((200, FEATURES_NUM))
+    for i in range(0, 200):
+        d1_data = th.get_data(driver_id, i+1)
+        X[i, :] = get_features(d1_data, True)
+    
+    return X
 
+def get_even_training_data(driver_id, n_routes=200, all_drivers=np.arange(1, 2735), randomize=True, weight=1):
+    rest_d = np.delete(all_drivers, driver_id)
+    
+    size_0 = int(weight*n_routes)
+    size_1 = n_routes
+    routes_1 = np.random.choice(200, n_routes, replace=False)
+    
+    labels = np.concatenate([np.full(size_1, 1, dtype=int), np.full(size_0, 0, dtype=int)])
+    drivers_0 = np.random.choice(rest_d, size_0, replace=False) #prevent duplicates
+    routes_0 = np.random.choice(200, size_0)
+    
+    
+    X = np.zeros((size_1 + size_0, FEATURES_NUM))
+    
+    for i in range(0, size_1):
+        d1_data = th.get_data(driver_id, routes_1[i]+1)
+        X[i, :] = get_features(d1_data, True)
+    
+    shift = size_1
+    
+    for i in range(0, size_0):
+        d0_data = th.get_data(drivers_0[i], routes_0[i] + 1)
+        X[shift + i, :] = get_features(d0_data, True)
+    
+    return X, labels
+    
 def get_training_data(driver_1_id, drivers_0_ids, r_ids=np.arange(1,201)):
 ## generate one big training data by labeled with ones for driver_1 paths 
 ## versus all other drivers routes, labeled. 
@@ -115,6 +151,14 @@ print np.shape(x)
 # <codecell>
 
 print np.arange(1,10)
+
+# <codecell>
+
+print get_even_training_data(1, 3)
+
+# <codecell>
+
+print get_all_driver_features(1)
 
 # <codecell>
 
