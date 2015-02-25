@@ -22,13 +22,14 @@ all_d = np.arange(1, 2735)
 
 d_1 = np.random.choice(all_d, 1)
 all_d = np.delete(all_d, d_1)
-d_0 = np.random.choice(all_d, 10, replace=False)
+d_0 = np.random.choice(all_d, 5, replace=False)
 
 print d_1, d_0
 
 r_indx = np.random.choice(np.arange(1, 201), 200, replace=False)
 
 X, y = get_training_data(d_1, d_0, r_indx)
+
 
 
 # import some data to play with
@@ -102,7 +103,7 @@ def cv_driver(d_id, n_folds=5):
     for i, (train, test) in enumerate(cv):
         fft = classifier.fit(X[train], y[train])
         probas_ = fft.predict_proba(X[test])
-    
+        print probas_
         # Compute ROC curve and area the curve
         fpr, tpr, thresholds = roc_curve(y[test], probas_[:, 1])
         mean_tpr += interp(mean_fpr, fpr, tpr)
@@ -147,14 +148,14 @@ from simple_hist_features import get_even_training_data, get_all_driver_features
 
 random_state = np.random.RandomState(0)
 ######
-def train_driver(d_id, n_iter = 10):
+def train_driver(d_id, n_iter = 5):
     X_all = get_all_driver_features(d_id)
     
     print "Computed features for all routes"
     
     probas = np.zeros((200, n_iter))
     for i in range(0, n_iter):
-        X, y = get_even_training_data(d_id, 100, weight = 1)
+        X, y = get_even_training_data(d_id, 100, weight = 5)
         classifier = svm.SVC(kernel='linear', probability=True,
                      random_state=random_state)
         fft = classifier.fit(X, y)
@@ -170,6 +171,11 @@ result, probas = train_driver(1)
 
 # <codecell>
 
+print result
+
+# <codecell>
+
+print probas
 
 # <codecell>
 
