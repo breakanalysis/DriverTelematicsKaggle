@@ -7,8 +7,8 @@ import TelematicsHelper as th
 import matplotlib.pyplot as plt
 import numpy as np
 
-BINS=20
-FEATURES_NUM = BINS**3
+BINS= th.get_bins()
+FEATURES_NUM = BINS**3 + 3*BINS**2 + 3*BINS
 
 def get_features(data, concat=False, plot=False):
     #.shape
@@ -24,9 +24,20 @@ def get_features(data, concat=False, plot=False):
     
     #just put everything in a huge multidimensional histogram
     v_acc_ang_h, edges = np.histogramdd([vel[:-1], acc, angles], range=([0, 160], [-20, 20], [-180, 180]), bins=BINS, normed=True)
+     #just put everything in a huge multidimensional histogram
+    v_acc_ang_h, edges = np.histogramdd([vel[:-1], acc, angles], range=([0, 160], [-20, 20], [-180, 180]), bins=BINS)
+    v_acc_h, _ = np.histogramdd([vel[:-1], acc], range=([0, 160], [-20, 20]), bins=BINS) 
+    v_ang_h, _ = np.histogramdd([vel[:-1], angles], range=([0, 160],  [-180, 180]), bins=BINS)
+    acc_ang_h, _ = np.histogramdd([ acc, angles], range=( [-20, 20], [-180, 180]), bins=BINS)
+    v_h, _  = np.histogram(vel[:-1], range=[0, 160], bins=BINS)
+    acc_h, _  = np.histogram(acc, range=[-20, 20], bins=BINS)
+    ang_h, _  = np.histogram(angles, range=[-180, 180], bins=BINS)
+    
+    
     
     if (concat):
-        return np.ravel(v_acc_ang_h)
+        return np.concatenate([np.ravel(v_acc_ang_h), np.ravel(v_acc_h), np.ravel(v_ang_h), np.ravel(acc_ang_h), v_h, acc_h, ang_h])
+    
     
     return v_acc_ang_h, edges#vel_h, acc_h, curv_h, angles_h
 
@@ -90,76 +101,4 @@ def get_training_data(driver_1_id, drivers_0_ids, r_ids=np.arange(1,201)):
         
     return X, labels
        
-
-# <codecell>
-
-data = th.get_data(1,2)
-hh = get_features(data, True, False)
-
-print np.size(hh)
-print np.size(data)
-
-# <codecell>
-
-data = th.get_data(1,10)
-feat = get_features(data, True, True)
-
-
-# <codecell>
-
-print np.diff(data, axis=0)
-
-# <codecell>
-
-cosang = np.dot([ 0., 1.], [ 1.,  0.])
-sinang = np.cross([ 0.,  1.], [ 1.,  0.])
-print np.arctan2(sinang, cosang)
-
-cosang = np.dot([ 1.,  0.], [ 0.,  1.])
-sinang = np.cross([ 1.,  0.], [ 0.,  1.])
-print np.arctan2(sinang, cosang)
-
-
-# <codecell>
-
-labels = np.concatenate([np.full(5, 1,dtype=int), np.full(5,0,dtype=int)])
-
-# <codecell>
-
-print labels
-
-# <codecell>
-
-
-# <codecell>
-
-print np.shape(th.get_driver_ids())
-
-# <codecell>
-
-x = th.get_driver_ids()
-y = np.delete(x, 1)
-
-# <codecell>
-
-print np.shape(y)
-
-# <codecell>
-
-print np.shape(x)
-
-# <codecell>
-
-print np.arange(1,10)
-
-# <codecell>
-
-print get_even_training_data(1, 3)
-
-# <codecell>
-
-print get_all_driver_features(1)
-
-# <codecell>
-
 

@@ -14,7 +14,12 @@ import pandas as pds
 import os
 from scipy import interpolate
 import pylab as P
-
+import simple_hist_features as shf
+from scipy import interp
+from sklearn import svm, datasets, linear_model
+from sklearn.metrics import roc_curve, auc
+from sklearn.cross_validation import StratifiedKFold, KFold
+import time
 
 
 
@@ -54,6 +59,81 @@ def get_data(i,j):
     path = "{0}{1}/{2}.csv".format(pre_path,i,j)
     return genfromtxt(path, delimiter=',', skip_header = 1)
 
+
+
+def calibrate_scores(probas):
+    even_spaced = np.linspace(0,1,200)
+    sorted_orig_indices = sorted(range(200), key= lambda(x): probas[x])
+    sorted_indices = sorted(range(200), key = lambda(x): sorted_orig_indices[x])
+    return even_spaced[sorted_indices]
+
+
+def score_driver(d_id, n_folds=2):
+    X, y = shf.get_even_training_data(d_id)
+    probas = np.zeros(200)
+    cv = StratifiedKFold(y, n_folds, shuffle=True)
+    random_state = np.random.RandomState(0)
+    classifier = svm.SVC(kernel='linear', probability=True,
+                     random_state=random_state)
+    
+    for i, (train, test) in enumerate(cv):
+        then = time.clock()
+        fft = classifier.fit(X[train], y[train])
+        print(time.clock()-then)
+        positive_test = test[test<200]
+        probas[positive_test] = fft.predict_proba(X[positive_test])
+    return calibrate_scores(probas)
+
+# BINS
+def get_bins():
+    return 10
+
+def average_features():
+    
+    BINS = get_bins()
+    num_routes = 20
+    routes = np.random.choice(200,num_routes,replace=False)
+    dr_ids = len(get_driver_ids())
+    tmp_data = get_data(1,1)
+    tmp_features = shf.get_features(tmp_data,True)
+    NUM_FEAT = np.size(tmp_features)
+    total = np.zeros(NUM_FEAT)
+    for i in range(1,1+dr_ids):
+        for route in routes:
+            total += shf.get_features(get_data(i,route+1))/num_routes
+    return total/dr_ids
+            
+        
+
+#incomplete and bad approach    
+'''
+def score_driver(d_id,n_folds = 10):
+    probas = np.zeros(200)
+    
+    cv1 = KFold(200, n_folds, shuffle=True)
+    cv0 = KFold(200, n_folds, shuffle=True)
+
+    X1 = X[:200]
+    y1 = np.ones(200)
+    X0 = X[200:]
+    y0 = np.zeros(200)
+    random_state = np.random.RandomState(0)
+
+    classifier = svm.SVC(kernel='linear', probability=True,
+                     random_state=random_state)
+    
+    for i, ((train1,test1),(train0,test0)) in enumerate(zip(cv1,cv0)):
+        Xtrain = np.concatenate([X1[train1],X0[train0]])
+        ytrain = np.concatenate([np.ones(len(train1)),np.zeros(len(train0))])
+        perm = np.random.permutation(len(ytrain))
+        Xtrain = Xtrain[perm]
+        ytrain = ytrain[perm]
+        
+        fft = classifier.fit(Xtrain, ytrain)
+        probas[test1] = fft.predict_proba(X1[test1])
+        
+        
+    return calibrate_scores(probas)'''
 
 def draw_trip(i,j,epsilon=0,X = None):
     #Use X for overriding trip data and provide your own data.
@@ -316,72 +396,4 @@ def angles(data):
     diff = np.diff(data, axis=0)
     return np.array([py_ang(diff[i,:], diff[i+1,:]) for i in xrange(diff.shape[0]-1)])
     
-
-# <codecell>
-
-import numpy as np
-import numpy.linalg as LA
-import math
-import matplotlib.pyplot as plt
-
-i,j = (1,1)
-epsilon = 2
-#test_pecker(i,j,epsilon)
-data = get_data(i,j)
-data, times = douglas_pecker(data,80)
-
-times = list(range(np.size(data,0)))
-
-#data = np.array([[np.cos(t),np.sin(t)] for t in np.linspace(0,math.pi,20)])
-#times = list(range(20))
-
-#data.shape
-#np.size(times)
-
-draw_spline_curvature(data,times)
-print accel(data)
-
-# <codecell>
-
-#draw_curvature(52,13,0,np.array([[np.cos(t),np.sin(t)] for t in np.linspace(0,2*math.pi,150)]))
-#test_pecker(-1,1,0.001,np.array([[np.cos(t),np.sin(t)] for t in np.linspace(0,2*math.pi,150)]))
-
-data = np.array([[np.cos(t),np.sin(t)] for t in np.linspace(0,2*math.pi,150)])
-datap,times = douglas_pecker(data,0)
-
-draw_curvature(1,1,0)
-
-# <codecell>
-
-X = get_data(34,46)
-X.shape
-
-times,X = rescale_route(X)
-
-fig,ax = plt.subplots()
-acc =accel(X)
-plt.plot(list(range(1,np.size(acc)+1)), acc)
-
-#real speeds
-#draw_trip(44,46,0)
-#constant speed
-draw_trip(0,0,1,X)
-
-# <codecell>
-
-data=np.array([[1.1,2.2],[3.5, 4.56], [6.456,3.45],[4.45,5.45], [1.45, 12.5]])
-print np.diff(data, axis=0)
-print angles(data)
-
-# <codecell>
-
-1+1
-
-# <codecell>
-
-X = get_data(1,1)
-print np.shape(X)
-
-# <codecell>
-
 

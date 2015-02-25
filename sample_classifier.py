@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from sklearn import svm, datasets, linear_model
 from sklearn.metrics import roc_curve, auc
-from sklearn.cross_validation import StratifiedKFold
+from sklearn.cross_validation import StratifiedKFold, KFold
 
 from simple_hist_features import get_training_data, get_even_training_data
 
@@ -24,7 +24,6 @@ d_1 = np.random.choice(all_d, 1)
 all_d = np.delete(all_d, d_1)
 d_0 = np.random.choice(all_d, 10, replace=False)
 
-print d_1, d_0
 
 r_indx = np.random.choice(np.arange(1, 201), 200, replace=False)
 
@@ -88,7 +87,9 @@ plt.legend(loc="lower right")
 plt.show()
 
 
-        
+    
+    
+    
 def cv_driver(d_id, n_folds=5):
     X, y = get_even_training_data(d_id)
     
@@ -132,9 +133,6 @@ def cv_driver(d_id, n_folds=5):
 
 # <codecell>
 
-
-# <codecell>
-
 import numpy as np
 from scipy import interp
 import matplotlib.pyplot as plt
@@ -167,10 +165,4 @@ def train_driver(d_id, n_iter = 10):
 # <codecell>
 
 result, probas = train_driver(1)
-
-# <codecell>
-
-
-# <codecell>
-
 
