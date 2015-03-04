@@ -7,7 +7,7 @@ import TelematicsHelper as th
 import matplotlib.pyplot as plt
 import numpy as np
 
-BINS=20
+BINS = 20
 FEATURES_NUM = BINS**3
 
 def get_features(data, concat=False, plot=False):
@@ -23,12 +23,14 @@ def get_features(data, concat=False, plot=False):
     
     
     #just put everything in a huge multidimensional histogram
-    v_acc_ang_h, edges = np.histogramdd([vel[:-1], acc, angles], range=([0, 160], [-20, 20], [-180, 180]), bins=BINS, normed=True)
+    v_acc_ang_h, edges = np.histogramdd([vel[:-1], acc, angles], 
+        range=([0, 160], [-20, 20], [-180, 180]), bins=BINS, normed=True)
     
     if (concat):
         return np.ravel(v_acc_ang_h)
     
     return v_acc_ang_h, edges#vel_h, acc_h, curv_h, angles_h
+
 
 def get_all_driver_features(driver_id):
     X = np.zeros((200, FEATURES_NUM))
@@ -38,15 +40,16 @@ def get_all_driver_features(driver_id):
     
     return X
 
+
 def get_even_training_data(driver_id, n_routes=200, all_drivers=np.arange(1, 2735), randomize=True, weight=1):
     rest_d = np.delete(all_drivers, driver_id)
-    
     size_0 = int(weight*n_routes)
     size_1 = n_routes
     routes_1 = np.random.choice(200, n_routes, replace=False)
-    
+
+
     labels = np.concatenate([np.full(size_1, 1, dtype=int), np.full(size_0, 0, dtype=int)])
-    drivers_0 = np.random.choice(rest_d, size_0, replace=False) #prevent duplicates
+    drivers_0 = np.random.choice(rest_d, size_0, replace=False)  #prevent duplicates
     routes_0 = np.random.choice(200, size_0)
     
     
@@ -90,76 +93,3 @@ def get_training_data(driver_1_id, drivers_0_ids, r_ids=np.arange(1,201)):
         
     return X, labels
        
-
-# <codecell>
-
-data = th.get_data(1,2)
-hh = get_features(data, True, False)
-
-print np.size(hh)
-print np.size(data)
-
-# <codecell>
-
-data = th.get_data(1,10)
-feat = get_features(data, True, True)
-
-
-# <codecell>
-
-print np.diff(data, axis=0)
-
-# <codecell>
-
-cosang = np.dot([ 0., 1.], [ 1.,  0.])
-sinang = np.cross([ 0.,  1.], [ 1.,  0.])
-print np.arctan2(sinang, cosang)
-
-cosang = np.dot([ 1.,  0.], [ 0.,  1.])
-sinang = np.cross([ 1.,  0.], [ 0.,  1.])
-print np.arctan2(sinang, cosang)
-
-
-# <codecell>
-
-labels = np.concatenate([np.full(5, 1,dtype=int), np.full(5,0,dtype=int)])
-
-# <codecell>
-
-print labels
-
-# <codecell>
-
-
-# <codecell>
-
-print np.shape(th.get_driver_ids())
-
-# <codecell>
-
-x = th.get_driver_ids()
-y = np.delete(x, 1)
-
-# <codecell>
-
-print np.shape(y)
-
-# <codecell>
-
-print np.shape(x)
-
-# <codecell>
-
-print np.arange(1,10)
-
-# <codecell>
-
-print get_even_training_data(1, 3)
-
-# <codecell>
-
-print get_all_driver_features(1)
-
-# <codecell>
-
-
