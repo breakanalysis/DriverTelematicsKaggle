@@ -103,6 +103,9 @@ class RegressionDriver(object):
 
             
     def grid_search(self):
+        """
+        Grid search for the two-round strategy, see the comment in classify()
+        """
         clf = grid_search_all(self.__traindata, self.__trainlabels)
 
         estimator = clf.best_estimator_
@@ -195,7 +198,11 @@ class RegressionDriver(object):
         
         predict = clf.predict_proba(self.__testdata)[:,1]
         samples = self.__trainlabels.shape[0]
-
+        """
+        First, we predict probabilities based on the whole set of driver traces.
+        On the second round we pick only 25 perc. top traces and use it as a new
+        learning set hoping that the first round prediction rate is better than 0.5 
+        """
         logging.debug("First round predictions %s", predict)
         ind = predict.argsort()[-samples/4:]
         #add more indices
