@@ -41,7 +41,7 @@ def velocities_and_distance_covered(x, y):
         distancesum += dist
     return v, distancesum
 
-BINS = 20
+BINS = 34
 
 def hist_features(vel, acc, angles, concat=False, plot=False):
 
@@ -56,6 +56,11 @@ def hist_features(vel, acc, angles, concat=False, plot=False):
     #just put everything in a huge multidimensional histogram
     v_acc_ang_h, edges = np.histogramdd([vel[:-1], acc, angles], 
         range=([0, 90], [-20, 20], [-20, 20]), bins=BINS, normed=True)
+
+    #max_arg = np.argsort(v_acc_ang_h)[-BINS:]
+    #logging.debug("max args: %s", max_arg)
+    #logging.debug("unravel_indexes: %s", np.unravel_index(max_arg, np.shape(edges)))
+    #logging.debug("max edges: %s", edges(np.unravel_index(max_arg, np.shape(edges))))
     
     if (concat):
         return np.ravel(v_acc_ang_h)
@@ -93,6 +98,8 @@ class Trace(object):
         self.triptime = np.shape(data)[0]
         
         lin = np.linspace(10, 90, 20);
+        
+        #tic = time.time()
 
         self.v_perc = np.percentile(self.vel, lin)
         #logging.debug("Velocity percentiles of driver %d: %s", driver_id, self.v_perc)
@@ -101,6 +108,7 @@ class Trace(object):
         self.ang_perc = np.percentile(self.angles, lin)
         #logging.debug("Angles percentiles of driver %d: %s", driver_id, self.ang_perc)
         
+
         self.all_hist_features = hist_features(self.vel, self.acc, self.angles, True)
 
 

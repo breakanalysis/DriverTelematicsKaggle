@@ -16,7 +16,7 @@ from joblib import Parallel, delayed
 
 import time
 
-REFERENCE_DATA = {}
+REFERENCE_DATA = {"drivers": {}, "num_ref_drivers": 4, "no_classifiers": 3}
 
 
 def get_driver_folder(driver_id):
@@ -32,7 +32,7 @@ def generatedata(drivers):
     """
     global REFERENCE_DATA
     for driver in drivers:
-        REFERENCE_DATA[driver.identifier] = driver.generate_data_model
+        REFERENCE_DATA["drivers"][driver.identifier] = driver.generate_data_model
 
 
 def perform_analysis(folder, cv=False):
@@ -49,7 +49,17 @@ def grid_search(folder):
     logging.info("Grid search on {0}".format(folder))
     temp = Driver(folder)
     cls = RegressionDriver(temp, REFERENCE_DATA)
-    cls.grid_search()
+    return cls.grid_search()
+
+def classify(folder, toKaggle=False):
+    logging.info("Grid search on {0}".format(folder))
+    temp = Driver(folder)
+    cls = RegressionDriver(temp, REFERENCE_DATA)
+    ret = cls.classify()
+    if (toKaggle):
+        logging.info(cls.toKaggle())
+    return ret
+
 
 def analysis(foldername, outdir, referencenum, max_drivers = 5):
     """
@@ -91,7 +101,7 @@ if __name__ == '__main__':
     logging.debug("my path %s", MyPath)
     #analysis(os.environ['TELEMATICS'], "/Users/zhelezov/coding/python/telematics/HelloWorld/axa-telematics/data/out/", 5, -1)
     analysis(os.environ['TELEMATICS'], 
-         "/Users/zhelezov/coding/python/telematics/axa-telematics/out/", 5, -1)
+         "/Users/zhelezov/coding/python/telematics/axa-telematics/out/", 30, -1)
 
 
 
