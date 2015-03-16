@@ -45,12 +45,12 @@ def grid_search_all(X, y):
     cv = StratifiedKFold(y, n_folds=5, shuffle=True)
 
     clf = GridSearchCV(pipe,
-        dict(pca__n_components = [200],
-            classification__n_estimators = [200],
+        dict(pca__n_components = [400],
+            classification__n_estimators = [400],
             classification__max_features = ["auto"],
             classification__max_depth = [20]),
             cv = cv,
-        scoring='roc_auc', verbose=0, n_jobs=1)
+        scoring='roc_auc', verbose=50, n_jobs=1)
     
     logging.debug("fit...")
     clf.fit(X, y)
@@ -92,6 +92,8 @@ class RegressionDriver(object):
 
         self.generate_training_data()
 
+        self.__first_round_ind = self.get_first_round_ind()
+
         self.classifier = Pipeline(steps=[
             ('imputer', Imputer()),
             ('preprocessing', StandardScaler(copy=True, with_mean=True, with_std=True)),
@@ -124,29 +126,42 @@ class RegressionDriver(object):
         
         self.__y = np.ones((self.my_testdata.shape[0],))
         self.__testdata = self.my_traindata
-            
+    
+    def prior_scores(self):
+        return self.__datadict['prior_scores'][self.driver.identifier]
+        
+    def prior_scores_cv(self):
+        clf = grid_search_all(self.__traindata, self.__trainlabels)
+        cv_score_round_1 = clf.best_score_
+        logging.debug(cv_score_round_1)
+        estimator = clf.best_estimator_  
+        estimator.predict_proba(self.__testdata)[:,1]  
+    
+
+    def get_first_round_ind(self):
+        predict = self.prior_scores()
+        samples = self.__trainlabels.shape[0]
+        logging.debug("First round predictions %s", predict)
+        top_scores_p = self.__datadict['top_scores_percent'] 
+        num_ref_drivers = self.__datadict['num_ref_drivers'] 
+        ind = np.argsort(predict)[-int(200*top_scores_p):]
+        logging.debug("%d Testig top %d indices", -int(samples*top_scores_p), ind.shape[0])
+        #add more indices
+        samples = self.__trainlabels.shape[0]
+        zero_ind = np.arange(predict.shape[0], predict.shape[0] + num_ref_drivers*ind.shape[0])
+        ind = np.append(ind, zero_ind)
+        logging.debug("Second round, indices: %s", ind)
+        
+
+        return ind
+
     def grid_search(self):
         """
         Grid search for the two-round strategy, see the comment in classify()
         """
-        self.generate_training_data()
-        clf = grid_search_all(self.__traindata, self.__trainlabels)
+        ind = self.__first_round_ind
 
-        cv_score_round_1 = clf.best_score_
 
-        logging.debug(cv_score_round_1)
-
-        estimator = clf.best_estimator_
-        predict = estimator.predict_proba(self.__testdata)[:,1]
-        samples = self.__trainlabels.shape[0]
-        logging.debug("First round predictions %s", predict)
-        ind = predict.argsort()[-samples/4:]
-        logging.debug("Top 25 indices: %s", ind)
-        #add more indices
-        samples = self.__trainlabels.shape[0]
-        zero_ind = np.arange(predict.shape[0], predict.shape[0] + samples/2)
-        ind = np.append(ind, zero_ind)
-        logging.debug("Second round, indices: %s", ind)
         X = self.__traindata[ind]
         y = self.__trainlabels[ind]
 
@@ -162,7 +177,7 @@ class RegressionDriver(object):
         logging.debug("Second round predictions %s", predict)
         logging.debug("done")
 
-        return cv_score_round_1, cv_score_round_2, predict
+        return cv_score_round_2, cv_score_round_2, predict
         
 
     def classify(self):
@@ -171,13 +186,12 @@ class RegressionDriver(object):
 
         for i in range(0, no_attempts):
             logging.info("Classification %d for driver %s", i, self.driver.identifier)
-            self.generate_training_data()
             probs = self.classify_once()
             probs = np.reshape(probs, (self.__y.shape[0], -1))
             attempts = np.append(attempts, probs, axis=1)
             logging.debug("Results so far:\n %s", attempts)
 
-        self.__y = np.median(attempts, axis=1)
+        self.__y = np.amax(attempts, axis=1)
 
         logging.debug("Final results:\n %s", self.__y)
 
@@ -189,34 +203,24 @@ class RegressionDriver(object):
         logging.info("Performing classification for driver %d", self.driver.identifier)
         tic = time.time()
       
-        clf = self.classifier
-        clf.fit(self.__traindata, self.__trainlabels)
-        toc1 = time.time()
-        logging.info("Fitting for driver %d complete in %.2fs. Predicting first round", self.driver.identifier, (toc1 - tic))
         
-        predict = clf.predict_proba(self.__testdata)[:,1]
-        samples = self.__trainlabels.shape[0]
-        """
-        First, we predict probabilities based on the whole set of driver traces.
-        On the second round we pick only 25 perc. top traces and use it as a new
-        learning set hoping that the first round prediction rate is better than 0.5 
-        """
-        logging.debug("First round predictions %s", predict)
-        ind = predict.argsort()[-samples/4:]
-        #add more indices
-        samples = self.__trainlabels.shape[0]
-        zero_ind = np.arange(predict.shape[0], predict.shape[0] + samples/2)
-        ind = np.append(ind, zero_ind)
-        #logging.debug("Second round, indices: %s", ind)
-        
+        ind = self.__first_round_ind
+
         X = self.__traindata[ind]
         y = self.__trainlabels[ind]
 
+        clf = self.classifier
+
         clf.fit(X, y)
 
+        toc1 = time.time()
+        
+        logging.info("Fitting round 1 for driver %d complete in %.2fs", self.driver.identifier, (toc1 - tic))
+        
         probas = clf.predict_proba(self.__testdata)[:,1]
         toc2 = time.time()
-        logging.info("Predicting for driver %d complete in %.2fs", self.driver.identifier, (toc2 - tic))
+
+        logging.info("Predicting for driver %d complete in %.2fs, Total time %.2f", self.driver.identifier, (toc2 - toc1), (toc2 - tic))
         
         return probas   
 

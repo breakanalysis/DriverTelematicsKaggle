@@ -57,15 +57,27 @@ def hist_features(vel, acc, angles, concat=False, plot=False):
     v_acc_ang_h, edges = np.histogramdd([vel[:-1], acc, angles], 
         range=([0, 90], [-20, 20], [-20, 20]), bins=BINS, normed=True)
 
-    #max_arg = np.argsort(v_acc_ang_h)[-BINS:]
+    max_arg = np.argsort(np.ravel(v_acc_ang_h))[-BINS*5:]
     #logging.debug("max args: %s", max_arg)
-    #logging.debug("unravel_indexes: %s", np.unravel_index(max_arg, np.shape(edges)))
-    #logging.debug("max edges: %s", edges(np.unravel_index(max_arg, np.shape(edges))))
+    unravel_ind = np.asarray(np.unravel_index(max_arg, np.shape(v_acc_ang_h)))
+    
+    #logging.debug("%s", unravel_ind)
+    acc_ang_v = np.empty(unravel_ind.shape, float)
+
+    for three_tup in range(unravel_ind.shape[1]):
+        aa = unravel_ind[:, three_tup]
+        acc_ang_v[:,three_tup] = [0 + (90.0/BINS)*aa[0], -20 + (40.0/BINS)*aa[1], 
+            -20 + (40.0/BINS)*aa[2]]
+
+    #logging.debug("%s", acc_ang_v)        
+    #logging.debug("max args: %s", max_arg)
+    #logging.debug("unravel_indexes: %s", unravel_ind)
+    #logging.debug("max edges: %s", edges[unravel_ind])
     
     if (concat):
         return np.ravel(v_acc_ang_h)
     
-    return v_acc_ang_h, edges
+    return v_acc_ang_h, acc_ang_v
 
 
 
@@ -108,14 +120,16 @@ class Trace(object):
         self.ang_perc = np.percentile(self.angles, lin)
         #logging.debug("Angles percentiles of driver %d: %s", driver_id, self.ang_perc)
         
-
-        self.all_hist_features = hist_features(self.vel, self.acc, self.angles, True)
+        all_h, acc_ang_v = hist_features(self.vel, self.acc, self.angles, False)
+        self.all_hist_features = np.ravel(all_h)
+        self.acc_ang_v = np.ravel(acc_ang_v)
 
 
     @property
     def features(self):
         """Returns a list that comprises all computed features of this trace."""
         features = np.array([])
+
         features = np.append(features, self.triplength)
         features = np.append(features, self.triptime)
         features = np.append(features, self.maxspeed)
@@ -125,6 +139,8 @@ class Trace(object):
         features = np.append(features, self.ang_perc)
         
         features = np.append(features, self.all_hist_features)
+        features = np.append(features, self.acc_ang_v)
+        
         return features
 
     def __str__(self):
